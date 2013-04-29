@@ -42,9 +42,10 @@
 #ifndef AGGREGATE_H_
 #define AGGREGATE_H_
 
-
 int new_route_add(struct ip_prefix_list **, const union olsr_ip_addr *, uint8_t);
 int exiting_route_del(struct ip_prefix_list **, const union olsr_ip_addr *, uint8_t);
+int check_route_relationship(union olsr_ip_addr , uint8_t , union olsr_ip_addr , uint8_t);
+union olsr_ip_addr get_network_address(union olsr_ip_addr, uint8_t);
 
 
 
