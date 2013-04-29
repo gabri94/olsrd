@@ -43,29 +43,31 @@
 int new_route_add(struct ip_prefix_list **list, const union olsr_ip_addr *net, uint8_t prefix_len){
 
 	struct ip_prefix_list *h;
-	for(h=list; h!='NULL'; h=h->next){ // scorro tutta la lista in cerca di route più grandi
-		//controllo se la route è già contenunta in una route più grande
+	for(h=list; h!='NULL'; h=h->next){ // scorro tutta la lista di hna
 		switch(check_route_relationship(net, prefix_len, h->net->prefix, h->net->prefix_len)){
 			case 2:
 				//TODO: gestione delle route rimosse, o non aggiunte, attraverso lista di appoggio
 				// non aggiungo la rotta in quanto ne annuncio già una più grande, ma la aggiungo a una lista di appoggio per ricordarmela quando rimuoverò qualcosa
-				return 1; // termino l'esecuzione in quanto ho, in qualche maniera, reso la destinazione raggiungibile
+				return 1;
 				break;
+
 			case 1:
 				ip_prefix_list_remove(list,h->net->prefix, h->net->prefix_len);
 				//TODO: gestione delle route rimosse attraverso la lista di appoggio
-				// non ritorno, perchè la route potrebbe ancora essere aggregata ad un altra
+				// non ritorno, perchè la route potrebbe ancora essere aggregabile
 				break;
+
 			case 0:
 				ip_prefix_list_remove(list,h->net->prefix, prefix_len); // rimuovo la subnet trovata
 				new_route_add(list, net, prefix_len-1); // annuncio la subnet più grande
-				return 2; // termino l'esecuzione in quanto ho reso la destinazione raggiungibile
+				return 2;
+				break;
+
+			case -1:
+				ip_prefix_list_add(list, net, prefix_len); // no way, we have to add this route as it is.
+				return 0;
 				break;
 		}
-		ip_prefix_list_add(list, net, prefix_len);
-		return 0;
-
-
 	}
 }
 
@@ -75,10 +77,14 @@ int new_route_add(struct ip_prefix_list **list, const union olsr_ip_addr *net, u
 
 int check_route_relationship(union olsr_ip_addr net1, uint8_t prefix_1, union olsr_ip_addr net2, uint8_t prefix_2){
 /*This function check the relationship between two given routes:
- * 	return 0 if the two routes are joinable in a single bigger route: 192.168.0.0/24 and 192.168.1.0/24 can be joined in 192.168.0.0/23
- * 	return 1 if  net1/prefix_1 contains net2/prefix_2 : 192.168.0.0/16 contains 192.168.1.0/24
- * 	return 2 if net1/prefix_2 is contained by net1/prefix_1:  192.168.1.0/24 is contained by 192.168.0.0/16
  * 	return -1 if there is no relationship
+ * 		eg: 192.168.1.0/24 and 192.168.3.0/24
+ * 	return 0 if the two routes are joinable in a single bigger route
+ * 		eg:	192.168.0.0/24 and 192.168.1.0/24 can be joined in 192.168.0.0/23
+ * 	return 1 if  net1/prefix_1 contains net2/prefix_2
+ * 		eg:	192.168.0.0/16 contains 192.168.1.0/24
+ * 	return 2 if net1/prefix_2 is contained by net1/prefix_1
+ * 		eg:	192.168.1.0/24 is contained by 192.168.0.0/16
  * 	*/
 	if(prefix_1==prefix_2){
 		if( get_network_address(net1->v4->s_addr, prefix_1-1) == get_network_address(net2->v4->s_addr, prefix_2-1)){
