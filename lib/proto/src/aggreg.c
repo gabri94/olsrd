@@ -45,33 +45,28 @@ int new_route_add(struct ip_prefix_list **list, const union olsr_ip_addr *net, u
 	struct ip_prefix_list *h;
 	for(h=list; h!='NULL'; h=h->next){ // scorro tutta la lista in cerca di route più grandi
 		//controllo se la route è già contenunta in una route più grande
-		if(check_route_relationship(net, prefix_len, h->net->prefix, h->net->prefix_len)==2){ // se la route nuova(net) è contenuta in quella attuale(h->net)
-			//TODO: gestione delle route rimosse, o non aggiunte, attraverso lista di appoggio
-			// non aggiungo la rotta in quanto ne annuncio già una più grande, ma la aggiungo a una lista di appoggio per ricordarmela quando rimuoverò qualcosa
-			return 1; // termino l'esecuzione in quanto ho, in qualche maniera, reso la destinazione raggiungibile
+		switch(check_route_relationship(net, prefix_len, h->net->prefix, h->net->prefix_len)){
+			case 2:
+				//TODO: gestione delle route rimosse, o non aggiunte, attraverso lista di appoggio
+				// non aggiungo la rotta in quanto ne annuncio già una più grande, ma la aggiungo a una lista di appoggio per ricordarmela quando rimuoverò qualcosa
+				return 1; // termino l'esecuzione in quanto ho, in qualche maniera, reso la destinazione raggiungibile
+				break;
+			case 1:
+				ip_prefix_list_remove(list,h->net->prefix, h->net->prefix_len);
+				//TODO: gestione delle route rimosse attraverso la lista di appoggio
+				// non ritorno, perchè la route potrebbe ancora essere aggregata ad un altra
+				break;
+			case 0:
+				ip_prefix_list_remove(list,h->net->prefix, prefix_len); // rimuovo la subnet trovata
+				new_route_add(list, net, prefix_len-1); // annuncio la subnet più grande
+				return 2; // termino l'esecuzione in quanto ho reso la destinazione raggiungibile
+				break;
 		}
-	}
+		ip_prefix_list_add(list, net, prefix_len);
+		return 0;
 
-	for(h=list; h!='NULL'; h=h->next){ // scorro tutta la lista in cerca di route più piccole
-		//controllo se la route nuova contiene già route più piccole
-		if(check_route_relationship(net, prefix_len, h->net->prefix, h->net->prefix_len)==1){ // se la route nuova contiene quella attuale
-			ip_prefix_list_remove(list,h->net->prefix, h->net->prefix_len);
-			//TODO: gestione delle route rimosse attraverso la lista di appoggio
-			// non ritorno, perchè la route potrebbe ancora essere aggregata ad un altra
-		}
-	}
 
-	for(h=list; h!='NULL'; h=h->next){ // scorro tutta la lista in cerca di route uguali
-
-		if(check_route_relationship(net, prefix_len, h->net->prefix, h->net->prefix_len)==0){
-			ip_prefix_list_remove(list,h->net->prefix, prefix_len); // rimuovo la subnet trovata
-			ip_prefix_list_add(list, net, prefix_len-1); // annuncio la subnet più grande
-			return 2; // termino l'esecuzione in quanto ho reso la destinazione raggiungibile
-		}
 	}
-	// se arrivo qui significa che devo aggiungere manualmente la route
-	ip_prefix_list_add(list, net, prefix_len);
-	return 0;
 }
 
 
