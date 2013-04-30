@@ -40,6 +40,7 @@
  */
 
 #include "proto.h"
+#include "aggreg.c"
 
 int target_proto_no = -1;
 int target_table_no = -1;
@@ -97,7 +98,8 @@ void parse_route_entry (struct  nlmsghdr *nlh)
 	olsr_printf(3, "*** PROTO: Adding HNA: %s/%d proto %d and gateway %s\n", \
          destination_address, proto_hna4_netmask_length, route_protocol, gateway_address);
 
-	ip_prefix_list_add(&olsr_cnf->hna_entries, &proto_hna4_addr, proto_hna4_netmask_length);
+	//ip_prefix_list_add(&olsr_cnf->hna_entries, &proto_hna4_addr, proto_hna4_netmask_length);
+	new_route_add(&olsr_cnf->hna_entries, &proto_hna4_addr, proto_hna4_netmask_length);
 }
 
 void
@@ -273,7 +275,7 @@ proto_inject_hnas (int fd __attribute__ ((unused)), void *data __attribute__ ((u
 		{
             olsr_printf(3, "*** PROTO: Adding HNA: %s/%d proto %d and gateway %s\n", \
 				destination_address, proto_hna4_netmask_length, route_protocol, gateway_address);
-			ip_prefix_list_add(&olsr_cnf->hna_entries, &proto_hna4_addr, proto_hna4_netmask_length);
+			new_route_add(&olsr_cnf->hna_entries, &proto_hna4_addr, proto_hna4_netmask_length);
 		}
     }
 

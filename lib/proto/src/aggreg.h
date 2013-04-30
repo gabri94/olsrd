@@ -42,6 +42,24 @@
 #ifndef AGGREGATE_H_
 #define AGGREGATE_H_
 
+/* System includes */
+#include <arpa/inet.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+/* OLSR includes */
+#include "olsr_types.h"         
+#include "olsrd_plugin.h"      
+#include "olsr.h"
+#include "ifnet.h"
+#include "lq_packet.h"
+#include "process_package.h"
+#include "ipcalc.h"
+#include "olsr_protocol.h"
+#include "parser.h"
+
 int new_route_add(struct ip_prefix_list **, const union olsr_ip_addr *, uint8_t);
 int exiting_route_del(struct ip_prefix_list **, const union olsr_ip_addr *, uint8_t);
 int check_route_relationship(union olsr_ip_addr , uint8_t , union olsr_ip_addr , uint8_t);
