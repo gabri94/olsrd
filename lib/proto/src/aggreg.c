@@ -44,7 +44,7 @@ int new_route_add(struct ip_prefix_list **list, const union olsr_ip_addr *net, u
 
 	struct ip_prefix_list *h;
 	for(h=*list; h!=NULL; h=h->next){ // scorro tutta la lista di hna
-		switch(check_route_relationship(*net, prefix_len, h.net.prefix, h.net.prefix_len)){
+		switch(check_route_relationship(*net, prefix_len, h->net.prefix, h->net.prefix_len)){
 			case 2:
 				//TODO: gestione delle route rimosse, o non aggiunte, attraverso lista di appoggio
 				// non aggiungo la rotta in quanto ne annuncio già una più grande, ma la aggiungo a una lista di appoggio per ricordarmela quando rimuoverò qualcosa
@@ -52,13 +52,13 @@ int new_route_add(struct ip_prefix_list **list, const union olsr_ip_addr *net, u
 				break;
 
 			case 1:
-				ip_prefix_list_remove(list, h.net.prefix, h.net.prefix_len);
+				ip_prefix_list_remove(list, &h->net.prefix, h->net.prefix_len);
 				//TODO: gestione delle route rimosse attraverso la lista di appoggio
 				// non ritorno, perchè la route potrebbe ancora essere aggregabile
 				break;
 
 			case 0:
-				ip_prefix_list_remove(list,h.net.prefix, prefix_len); // rimuovo la subnet trovata
+				ip_prefix_list_remove(list, &h->net.prefix, prefix_len); // rimuovo la subnet trovata
 				new_route_add(list, net, prefix_len-1); // annuncio la subnet più grande
 				return 2;
 				break;
@@ -88,17 +88,17 @@ int check_route_relationship(union olsr_ip_addr net1, uint8_t prefix_1, union ol
  * 		eg:	192.168.1.0/24 is contained by 192.168.0.0/16
  * 	*/
 	if(prefix_1==prefix_2){
-		if( get_network_address(net1.v4.s_addr, prefix_1-1) == get_network_address(net2.v4.s_addr, prefix_2-1)){
+		if(get_network_address(net1, prefix_1-1) == get_network_address(net2, prefix_2-1)){
 			return 0;
 		}
 	}
 	else if(prefix_1<prefix_2){
-		if(get_network_address(net2.v4.s_addr, prefix_1)== get_network_address(net1.v4.s_addr, prefix_1)){ //
+		if(get_network_address(net2, prefix_1) == get_network_address(net1, prefix_1)){
 			return 1;
 		}
 	}
 	else if(prefix_1>prefix_2){// se la net2 è più grande
-		if(get_network_address(net1.v4.s_addr, prefix_2)==get_network_address(net2.v4.s_addr, prefix_2)){
+		if(get_network_address(net1, prefix_2) == get_network_address(net2, prefix_2)){
 			return 2;
 		}
 	}
@@ -109,6 +109,6 @@ int check_route_relationship(union olsr_ip_addr net1, uint8_t prefix_1, union ol
 /* This function return the network address of a given ip address and netmask
  * eg: get_network_address(192.168.1.1, 16) will return 192.168.0.0
  * */
-union olsr_ip_addr get_network_address(union olsr_ip_addr ip, uint8_t prefix_len){
-	return ((2)^(prefix_len-1)&ip; // bitwise AND between ip address and subnet mask
+unsigned long get_network_address(union olsr_ip_addr ip, uint8_t prefix_len){
+	return ((2)^(prefix_len-1))&ip.v4.s_addr; // bitwise AND between ip address and subnet mask
 }
