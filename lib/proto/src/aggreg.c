@@ -64,10 +64,11 @@ int new_route_add(struct ip_prefix_list **list, const union olsr_ip_addr *net, u
 				break;
 
 			case -1:
-				ip_prefix_list_add(list, net, prefix_len); // no way, we have to add this route as it is.
-				return 0;
+				//le due route non sono aggregabili
 				break;
 		}
+		ip_prefix_list_add(list, net, prefix_len); // no way, we have to add this route as it is.
+		return 0;
 	}
 }
 
