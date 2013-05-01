@@ -40,7 +40,7 @@
  */
 
 #include "proto.h"
-#include "aggreg.c"
+#include "aggreg.h"
 
 int target_proto_no = -1;
 int target_table_no = -1;
