@@ -39,27 +39,30 @@
  *
  */
 #include "aggreg.h"
+//This function is called by the main plugin every time that a route has to be added to the HNA's list
+//The parameters are the pointer to the pointer of the hna's list, the ip of the network and the lenght of the prefix of the net
 
 int new_route_add(struct ip_prefix_list **list, const union olsr_ip_addr *net, uint8_t prefix_len){
 
 	struct ip_prefix_list *h;
-	for(h=*list; h!=NULL; h=h->next){ // scorro tutta la lista di hna
+	for(h=*list; h!=NULL; h=h->next){ // search inside all the hna's list
 		switch(check_route_relationship(*net, prefix_len, h->net.prefix, h->net.prefix_len)){
 			case 2:
-				//TODO: gestione delle route rimosse, o non aggiunte, attraverso lista di appoggio
-				// non aggiungo la rotta in quanto ne annuncio già una più grande, ma la aggiungo a una lista di appoggio per ricordarmela quando rimuoverò qualcosa
+				//TODO: management of the deleted routes using another list to store it
+				// don't add the new route in this case because it is already reachable using the bigger one.
+				// must store this new route in the case of the bigger one have to be deleted.
 				return 1;
 				break;
 
 			case 1:
-				ip_prefix_list_remove(list, &h->net.prefix, h->net.prefix_len);
-				//TODO: gestione delle route rimosse attraverso la lista di appoggio
-				// non ritorno, perchè la route potrebbe ancora essere aggregabile
+				ip_prefix_list_remove(list, &h->net.prefix, h->net.prefix_len); // delete this route becaus it is contained in my new route
+				//TODO: management of the deleted routes using another list to store it
+				// this route could be still joined to another, so i don't return.
 				break;
 
 			case 0:
-				ip_prefix_list_remove(list, &h->net.prefix, prefix_len); // rimuovo la subnet trovata
-				new_route_add(list, net, prefix_len-1); // annuncio la subnet più grande
+				ip_prefix_list_remove(list, &h->net.prefix, prefix_len); // delete this route because it has to be joined with the new one
+				new_route_add(list, net, prefix_len-1); // add the bigger route that contains the the two ones
 				return 2;
 				break;
 
@@ -87,6 +90,7 @@ int check_route_relationship(union olsr_ip_addr net1, uint8_t prefix_1, union ol
  * 	return 2 if net1/prefix_2 is contained by net1/prefix_1
  * 		eg:	192.168.1.0/24 is contained by 192.168.0.0/16
  * 	*/
+	//check the lenght of the prefix to know which route is bigger
 	if(prefix_1==prefix_2){
 		if(get_network_address(net1, prefix_1-1) == get_network_address(net2, prefix_2-1)){
 			return 0;
@@ -97,7 +101,7 @@ int check_route_relationship(union olsr_ip_addr net1, uint8_t prefix_1, union ol
 			return 1;
 		}
 	}
-	else if(prefix_1>prefix_2){// se la net2 è più grande
+	else if(prefix_1>prefix_2){
 		if(get_network_address(net1, prefix_2) == get_network_address(net2, prefix_2)){
 			return 2;
 		}
