@@ -122,6 +122,7 @@ static void ipc_print_neighbors(struct autobuf *);
 static void ipc_print_links(struct autobuf *);
 static void ipc_print_routes(struct autobuf *);
 static void ipc_print_topology(struct autobuf *);
+static void ipc_print_netjson(struct autobuf *);
 static void ipc_print_hna(struct autobuf *);
 static void ipc_print_mid(struct autobuf *);
 static void ipc_print_gateways(struct autobuf *);
@@ -153,6 +154,7 @@ static size_t build_http_header(const char *status, const char *mime,
 #define SIW_TOPOLOGY 0x0020
 #define SIW_GATEWAYS 0x0040
 #define SIW_INTERFACES 0x0080
+#define SIW_NETJSON 0x0400
 #define SIW_RUNTIME_ALL 0x00FF
 
 /* these only change at olsrd startup */
@@ -563,6 +565,7 @@ ipc_action(int fd, void *data __attribute__ ((unused)), unsigned int flags __att
         if (0 != strstr(requ, "/interfaces")) send_what |= SIW_INTERFACES;
         if (0 != strstr(requ, "/config")) send_what |= SIW_CONFIG;
         if (0 != strstr(requ, "/plugins")) send_what |= SIW_PLUGINS;
+        if (0 != strstr(requ, "/netjson")) send_what |= SIW_NETJSON;
       }
     }
     if ( send_what == 0 ) send_what = SIW_ALL;
@@ -706,6 +709,100 @@ ipc_print_topology(struct autobuf *abuf)
           abuf_json_int(abuf, "tcEdgeCost", tc_edge->cost);
         abuf_json_int(abuf, "validityTime", diff);
         abuf_json_close_array_entry(abuf);
+      }
+    }
+    OLSR_FOR_ALL_TC_EDGE_ENTRIES_END(tc, tc_edge);
+  }
+  OLSR_FOR_ALL_TC_ENTRIES_END(tc);
+
+  abuf_json_close_array(abuf);
+}
+
+static void
+ipc_print_netjson(struct autobuf *abuf)
+{
+  /*Netjson header info */
+  struct tc_entry *tc;
+  struct ipaddr_str mainaddrbuf;
+  int idx;
+  struct mid_entry *entry;
+  struct mid_address *alias;
+
+  abuf_json_string(abuf, "type", "Networkgraph");
+  abuf_json_string(abuf, "protocol", "olsr");
+  //must split version from revision
+  abuf_json_string(abuf, "version", olsrd_version);
+  abuf_json_string(abuf, "revision", olsrd_version);
+  abuf_json_string(abuf, "metric", "find_metric");
+  abuf_json_string(abuf, "router_id",
+                   olsr_ip_to_string(&mainaddrbuf, &olsr_cnf->main_addr));
+  abuf_json_open_array(abuf, "nodes");
+
+
+  /* Nodes */
+  for (idx = 0; idx < HASHSIZE; idx++) {
+    entry = mid_set[idx].next;
+
+    while (entry != &mid_set[idx]) {
+      struct ipaddr_str buf, buf2;
+      abuf_json_open_array_entry(abuf);
+      abuf_json_string(abuf, "id",
+                       olsr_ip_to_string(&buf, &entry->main_addr));
+      abuf_json_insert_comma(abuf);
+      abuf_json_open_object(abuf, "properties");
+      abuf_json_open_array(abuf, "aliases");
+      alias = entry->aliases;
+      while (alias) {
+        uint32_t vt = alias->vtime - now_times;
+        int diff = (int)(vt);
+
+        abuf_json_open_array_entry(abuf);
+        abuf_json_string(abuf, "id",
+                         olsr_ip_to_string(&buf2, &alias->alias));
+        abuf_json_int(abuf, "validityTime", diff);
+        abuf_json_close_array_entry(abuf);
+
+        alias = alias->next_alias;
+      }
+      abuf_json_close_array(abuf); // aliases
+      abuf_json_close_object(abuf); // proprieties
+      abuf_json_close_array_entry(abuf); //node
+      entry = entry->next;
+    }
+  }
+
+  abuf_json_close_array(abuf);
+  abuf_json_open_array(abuf, "links");
+
+
+  /* Edges */
+  OLSR_FOR_ALL_TC_ENTRIES(tc) {
+    struct tc_edge_entry *tc_edge;
+    OLSR_FOR_ALL_TC_EDGE_ENTRIES(tc, tc_edge) {
+      if (tc_edge->edge_inv) {
+        struct ipaddr_str dstbuf, addrbuf;
+        struct lqtextbuffer lqbuffer1;
+        uint32_t vt = tc->validity_timer != NULL ? (tc->validity_timer->timer_clock - now_times) : 0;
+        int diff = (int)(vt);
+        const char* lqs;
+        abuf_json_open_array_entry(abuf);
+        abuf_json_string(abuf, "target",
+                         olsr_ip_to_string(&dstbuf, &tc_edge->T_dest_addr));
+        abuf_json_string(abuf, "source",
+                         olsr_ip_to_string(&addrbuf, &tc->addr));
+        if (tc_edge->cost >= LINK_COST_BROKEN)
+          abuf_json_float(abuf, "weight", ((float)LINK_COST_BROKEN)/1024);
+        else
+          abuf_json_float(abuf, "tcEdgeCost", ((float)tc_edge->cost)/1024);
+        abuf_json_insert_comma(abuf);
+        abuf_json_open_object(abuf, "properties");
+        abuf_json_int(abuf, "validityTime", diff);
+        lqs = get_tc_edge_entry_text(tc_edge, '\t', &lqbuffer1);
+        abuf_json_float(abuf, "linkQuality", atof(lqs));
+        abuf_json_float(abuf, "neighborLinkQuality", atof(strrchr(lqs, '\t')));
+        abuf_json_close_object(abuf); // proprieties
+        abuf_json_close_array_entry(abuf);
+
       }
     }
     OLSR_FOR_ALL_TC_EDGE_ENTRIES_END(tc, tc_edge);
@@ -1322,6 +1419,7 @@ send_info(unsigned int send_what, int the_socket)
   if ((send_what & SIW_LINKS) == SIW_LINKS) ipc_print_links(&abuf);
   if ((send_what & SIW_NEIGHBORS) == SIW_NEIGHBORS) ipc_print_neighbors(&abuf);
   if ((send_what & SIW_TOPOLOGY) == SIW_TOPOLOGY) ipc_print_topology(&abuf);
+  if ((send_what & SIW_NETJSON) == SIW_NETJSON) ipc_print_netjson(&abuf);
   if ((send_what & SIW_HNA) == SIW_HNA) ipc_print_hna(&abuf);
   if ((send_what & SIW_MID) == SIW_MID) ipc_print_mid(&abuf);
   if ((send_what & SIW_ROUTES) == SIW_ROUTES) ipc_print_routes(&abuf);
